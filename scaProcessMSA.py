@@ -78,49 +78,29 @@ if __name__ =='__main__':
 
         PARAMETERS = [0.2, 0.2, 0.2, 0.8]
 
-        #A little bit of error checking/feedback for the user.
-        if options.i_ref is None:
-            if options.species != None and options.pdbid == None:
-                print("No PDBid, ignoring species...")
-                options.species = None
-            if options.refseq is not None and options.refpos is None:
-                print("Using reference sequence but no position list provided! Just numbering positions 1 to length(sequence)")
-                if options.pdbid is not None:
-                    print("And...ignoring the PDB file...")
-                    options.pdbid = None
-                options.refpos = range(len(options.refseq))+1
-
-            if options.refseq is not None and options.refpos is not None:
-                print("Using the reference sequence and position list...")
-                if options.pdbid is not None:
-                    print("And...ignoring the PDB file...")
-                    options.pdbid = None
-        else:
-            i_ref = options.i_ref
-
-        # Read in initial alignment
         headers_full, sequences_full = sca.readAlg(options.alignment)
-        print('Loaded alignment of %i sequences, %i positions.' % (len(headers_full), len(sequences_full[0])))
+        print('Loaded alignment of {} sequences, {} positions.'.format(len(headers_full), len(sequences_full[0])))
 
-        # Check the alignment and remove sequences containing non-standard amino acids
         print("Checking alignment for non-standard amino acids")
-        alg_out = list()
-        hd_out = list()
-        for i,k in enumerate(sequences_full):
-            flag=0
+        alg_out, hd_out  = list(), list()
+        for i, k in enumerate(sequences_full):
+            has_invalid = False
             for aa in k:
                 if aa not in 'ACDEFGHIKLMNPQRSTVWY-':
-                    flag = 1
-            if (flag ==0):
-                    alg_out.append(k)
-                    hd_out.append(headers_full[i])
+                    has_invalid = True
+                    break
+            if has_invalid:
+                continue
+            else:
+                alg_out.append(k)
+                hd_out.append(headers_full[i])
         headers_full = hd_out
         sequences_full = alg_out
         print("Aligment size after removing sequences with non-standard amino acids: %i" % (len(sequences_full)))
 
         # Do an initial trimming to remove excessively gapped positions - this is critical for building a correct ATS
         print("Trimming alignment for highly gapped positions (80% or more).")
-        alg_out,poskeep = sca.filterPos(sequences_full,[1],0.8)
+        alg_out, poskeep = sca.filterPos(sequences_full, [1], 0.8)
         sequences_ori = sequences_full
         sequences_full = alg_out
         print("Alignment size post-trimming: %i positions" % len(sequences_full[0]))
