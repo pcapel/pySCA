@@ -65,6 +65,7 @@ FINAL_MSG = """Final alignment parameters:
     Size of the distance matrix: {} x {}
 """
 
+PARAMETERS = [0.2, 0.2, 0.2, 0.8]
 DEFAULT_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY-"
 
 if __name__ == '__main__':
@@ -77,8 +78,6 @@ if __name__ == '__main__':
                             help="truncate the alignment to the positions in the reference PDB, default: False")
         parser.add_argument("--output", dest="outputfile", default=None, help="specify an outputfile name")
         options = parser.parse_args()
-
-        PARAMETERS = [0.2, 0.2, 0.2, 0.8]
 
         headers_full, sequences_full = sca.readAlg(options.alignment)
         print("Loaded alignment of {} sequences, {} positions.".format(len(headers_full), len(sequences_full[0])))
@@ -142,8 +141,7 @@ if __name__ == '__main__':
         headers = [headers_full[s] for s in seqkeep]
         alg1, iposkeep = sca.filterPos(alg0, seqw0, PARAMETERS[0])
         ats = [ats[i] for i in iposkeep]
-        if options.pdbid is not None: 
-            distmat = dist_pdb[np.ix_(iposkeep, iposkeep)]
+        distmat = dist_pdb[np.ix_(iposkeep, iposkeep)]
         effseqsprelimit = int(seqw0.sum())
         Nseqprelimit = len(alg1)
         print("After filtering: alignment size is {} seqs, {} effective seqs, {} pos".format(
