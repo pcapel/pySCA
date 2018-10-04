@@ -96,7 +96,7 @@ if __name__ =='__main__':
                 hd_out.append(headers_full[i])
         headers_full = hd_out
         sequences_full = alg_out
-        print("Aligment size after removing sequences with non-standard amino acids: %i" % (len(sequences_full)))
+        print("Alignment size after removing sequences with non-standard amino acids: %i" % (len(sequences_full)))
 
         # Do an initial trimming to remove excessively gapped positions - this is critical for building a correct ATS
         print("Trimming alignment for highly gapped positions (80% or more).")
@@ -149,51 +149,16 @@ if __name__ =='__main__':
             dist_pdb = dist_new
         except:
             sys.exit("Error!!! Something wrong with PDBid or path...")
-        elif options.refseq is not None:
-            print("Finding reference sequence using provided sequence file...")
-            try:
-                h_tmp, s_tmp = sca.readAlg(options.refseq)
-                i_ref = sca.MSAsearch(headers_full, sequences_full,s_tmp[0])
-                options.i_ref = i_ref
-                print("reference sequence index is: %i" % (i_ref))
-                print(headers_full[i_ref])
-                if options.refpos is not None:
-                    try:
-                        f = open(options.refpos,'r')
-                        ats_tmp = [line.rstrip('\n') for line in f]
-                        f.close()
-                    except:
-                        print("Error reading reference position file! Using default numbering 1 to number of positions")
-                        ats_tmp = range(len(sequences[0]))
-                else:
-                    print("No reference position list provided.  Using default numbering 1 to number of positions")
-                    ats_tmp = range(len(sequences_full[0]))
-                sequences, ats = sca.makeATS(sequences_full, ats_tmp, s_tmp[0], i_ref, options.truncate)
-            except:
-                sys.exit("Error!!  Can't find reference sequence...")
-        else:
-            msa_num = sca.lett2num(sequences_full)
-            i_ref = sca.chooseRefSeq(sequences_full)
-            print("No reference sequence given, chose as default (%i): %s" % (i_ref, headers_full[i_ref]))
-            sequences = sequences_full
-            ats = range(len(sequences[0]))
-
         # filtering sequences and positions, calculations of effective number of seqs
         print("Conducting sequence and position filtering: alignment size is %i seqs, %i pos" % (len(sequences), len(sequences[0])))   
-        if options.pdbid is not None:
-            print("ATS and distmat size - ATS: %i, distmat: %i x %i" % (len(ats), len(dist_pdb), len(dist_pdb[0])))
-        else:
-            print("ATS should also have %i positions - ATS: %i" % (len(sequences[0]), len(ats)))
+        print("ATS and distmat size - ATS: %i, distmat: %i x %i" % (len(ats), len(dist_pdb), len(dist_pdb[0])))
 
-        if i_ref is not None:
-            alg0, seqw0, seqkeep = sca.filterSeq(sequences, i_ref, max_fracgaps=options.parameters[1], min_seqid=options.parameters[2], \
-                                                                   max_seqid=options.parameters[3])
-        else:
-            alg0, seqw0, seqkeep = sca.filterSeq(sequences, max_fracgaps=options.parameters[1], min_seqid=options.parameters[2], \
-                                                                   max_seqid=options.parameters[3])
+        alg0, seqw0, seqkeep = sca.filterSeq(sequences, max_fracgaps=PARAMETERS[1],
+                                             min_seqid=PARAMETERS[2],
+                                             max_seqid=PARAMETERS[3])
        
         headers = [headers_full[s] for s in seqkeep]
-        alg1, iposkeep = sca.filterPos(alg0, seqw0, options.parameters[0])
+        alg1, iposkeep = sca.filterPos(alg0, seqw0, PARAMETERS[0])
         ats = [ats[i] for i in iposkeep]
         if options.pdbid is not None: 
             distmat = dist_pdb[np.ix_(iposkeep,iposkeep)]
@@ -224,9 +189,7 @@ if __name__ =='__main__':
             print("Number of positions in the ats: %i" % (len(ats)))
             structPos = [i for (i,k) in enumerate(ats) if k != '-']
             print("Number of structure positions mapped: %i" % (len(structPos)))
-            print("Size of the distance matrix: %i x %i" %(len(distmat),len(distmat[0])))
-
-        # saving the important stuff. Everything is stored in a file called [MSAname]_sequence.db.  But we will also write out the final processed alignment to a fasta file.
+            print("Size of the distance matrix: %i x %i" % (len(distmat), len(distmat[0])))
 
         path_list = options.alignment.split(os.sep)
         fn = path_list[-1]
@@ -240,12 +203,12 @@ if __name__ =='__main__':
 
         D = {}
         D['alg'] = alg
-        D['hd'] = hd # keep
-        D['msa_num'] = msa_num # keep
-        D['seqw'] = seqw # keep
-        D['Nseq'] = Nseq # keep
-        D['Npos'] = Npos # keep
-        D['ats'] = ats # keep
+        D['hd'] = hd  # keep
+        D['msa_num'] = msa_num  # keep
+        D['seqw'] = seqw  # keep
+        D['Nseq'] = Nseq  # keep
+        D['Npos'] = Npos  # keep
+        D['ats'] = ats  # keep
         D['effseqs'] = effseqs
         D['limitseqs'] = options.Nselect
         D['NseqPrelimit'] = Nseqprelimit
@@ -269,4 +232,4 @@ if __name__ =='__main__':
         db['sequence']=D
  
         pickle.dump(db,open("Outputs/"+ fn_noext + ".db","wb"))
-                
+
