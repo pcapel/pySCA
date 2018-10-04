@@ -105,32 +105,19 @@ if __name__ =='__main__':
         sequences_full = alg_out
         print("Alignment size post-trimming: %i positions" % len(sequences_full[0]))
 
-        # If i_ref is directly provided, we use it, ignoring all else.  Otherwise, we explore the other ways of specifying a reference sequences: (1) providing a PDBid (chainID defaults to 'A'), (2) providing the protein sequence with position numbers (defaults to just sequence numbering).  If none of these is provided, we just make an alignment based numbering for ats.  If a PDBid is provided, there is an option to also provide species information to permit identifying the reference sequence in the MSA without use of external packages for fast pairwise alignments. 
-
-        if options.pdbid is not None:
-            try:
-                seq_pdb, ats_pdb, dist_pdb = sca.pdbSeq(options.pdbid, options.chainID)
-                if options.species is not None:
+        try:
+            seq_pdb, ats_pdb, dist_pdb = sca.pdbSeq(options.pdbid, options.chainID)
+            if options.species is not None:
+                try:
+                    print("Finding reference sequence using species-based best match..")
+                    i_ref = sca.MSAsearch(headers_full, sequences_full, seq_pdb, options.species)
+                    Options_ref = i_ref
+                    print("reference sequence index is: %i" % (i_ref))
+                    print(headers_full[i_ref])
+                    print(sequences_full[i_ref])
+                except:
+                    print("Cant find the reference sequence using species-based best_match! Using global MSAsearch...")
                     try:
-                        print("Finding reference sequence using species-based best match..")
-                        i_ref = sca.MSAsearch(headers_full, sequences_full, seq_pdb, options.species)
-                        Options_ref = i_ref
-                        print("reference sequence index is: %i" % (i_ref))
-                        print(headers_full[i_ref])
-                        print(sequences_full[i_ref])
-                    except:
-                        print("Cant find the reference sequence using species-based best_match! Using global MSAsearch...")
-                        try:
-                            i_ref = sca.MSAsearch(headers_full, sequences_full,seq_pdb)
-                            options.i_ref = i_ref
-                            print("reference sequence index is: %i"  % (i_ref))
-                            print(headers_full[i_ref])
-                            print(sequences_full[i_ref])
-                        except:
-                            sys.exit("Error!!  Can't find reference sequence...")
-                else:
-                    try:
-                        print("Finding reference sequence using global MSAsearch...")
                         i_ref = sca.MSAsearch(headers_full, sequences_full,seq_pdb)
                         options.i_ref = i_ref
                         print("reference sequence index is: %i"  % (i_ref))
@@ -138,48 +125,58 @@ if __name__ =='__main__':
                         print(sequences_full[i_ref])
                     except:
                         sys.exit("Error!!  Can't find reference sequence...")
-                sequences, ats = sca.makeATS(sequences_full, ats_pdb, seq_pdb, i_ref, options.truncate)
-                dist_new = np.zeros((len(ats), len(ats)))
-                for (j,pos1) in enumerate(ats):
-                    for (k,pos2) in enumerate(ats):
-                        if k!=j:
-                            if (pos1 == '-') or (pos2 == '-'):
-                                dist_new[j,k] == 1000;
-                            else:
-                                ix_j = ats_pdb.index(pos1)
-                                ix_k = ats_pdb.index(pos2)
-                                dist_new[j,k] = dist_pdb[ix_j,ix_k]
-                dist_pdb = dist_new
-            except:
-                sys.exit("Error!!! Something wrong with PDBid or path...")
-            elif options.refseq is not None:
-                print("Finding reference sequence using provided sequence file...")
+            else:
                 try:
-                    h_tmp, s_tmp = sca.readAlg(options.refseq)
-                    i_ref = sca.MSAsearch(headers_full, sequences_full,s_tmp[0])
+                    print("Finding reference sequence using global MSAsearch...")
+                    i_ref = sca.MSAsearch(headers_full, sequences_full,seq_pdb)
                     options.i_ref = i_ref
-                    print("reference sequence index is: %i" % (i_ref))
+                    print("reference sequence index is: %i"  % (i_ref))
                     print(headers_full[i_ref])
-                    if options.refpos is not None:
-                        try:
-                            f = open(options.refpos,'r')
-                            ats_tmp = [line.rstrip('\n') for line in f]
-                            f.close()
-                        except:
-                            print("Error reading reference position file! Using default numbering 1 to number of positions")
-                            ats_tmp = range(len(sequences[0]))
-                    else:
-                        print("No reference position list provided.  Using default numbering 1 to number of positions")
-                        ats_tmp = range(len(sequences_full[0]))
-                    sequences, ats = sca.makeATS(sequences_full, ats_tmp, s_tmp[0], i_ref, options.truncate)
+                    print(sequences_full[i_ref])
                 except:
                     sys.exit("Error!!  Can't find reference sequence...")
-            else:
-                msa_num = sca.lett2num(sequences_full)
-                i_ref = sca.chooseRefSeq(sequences_full)
-                print("No reference sequence given, chose as default (%i): %s" % (i_ref, headers_full[i_ref]))
-                sequences = sequences_full
-                ats = range(len(sequences[0]))
+            sequences, ats = sca.makeATS(sequences_full, ats_pdb, seq_pdb, i_ref, options.truncate)
+            dist_new = np.zeros((len(ats), len(ats)))
+            for (j,pos1) in enumerate(ats):
+                for (k,pos2) in enumerate(ats):
+                    if k!=j:
+                        if (pos1 == '-') or (pos2 == '-'):
+                            dist_new[j,k] == 1000;
+                        else:
+                            ix_j = ats_pdb.index(pos1)
+                            ix_k = ats_pdb.index(pos2)
+                            dist_new[j,k] = dist_pdb[ix_j,ix_k]
+            dist_pdb = dist_new
+        except:
+            sys.exit("Error!!! Something wrong with PDBid or path...")
+        elif options.refseq is not None:
+            print("Finding reference sequence using provided sequence file...")
+            try:
+                h_tmp, s_tmp = sca.readAlg(options.refseq)
+                i_ref = sca.MSAsearch(headers_full, sequences_full,s_tmp[0])
+                options.i_ref = i_ref
+                print("reference sequence index is: %i" % (i_ref))
+                print(headers_full[i_ref])
+                if options.refpos is not None:
+                    try:
+                        f = open(options.refpos,'r')
+                        ats_tmp = [line.rstrip('\n') for line in f]
+                        f.close()
+                    except:
+                        print("Error reading reference position file! Using default numbering 1 to number of positions")
+                        ats_tmp = range(len(sequences[0]))
+                else:
+                    print("No reference position list provided.  Using default numbering 1 to number of positions")
+                    ats_tmp = range(len(sequences_full[0]))
+                sequences, ats = sca.makeATS(sequences_full, ats_tmp, s_tmp[0], i_ref, options.truncate)
+            except:
+                sys.exit("Error!!  Can't find reference sequence...")
+        else:
+            msa_num = sca.lett2num(sequences_full)
+            i_ref = sca.chooseRefSeq(sequences_full)
+            print("No reference sequence given, chose as default (%i): %s" % (i_ref, headers_full[i_ref]))
+            sequences = sequences_full
+            ats = range(len(sequences[0]))
 
         # filtering sequences and positions, calculations of effective number of seqs
         print("Conducting sequence and position filtering: alignment size is %i seqs, %i pos" % (len(sequences), len(sequences[0])))   
