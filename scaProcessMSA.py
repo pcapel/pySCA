@@ -56,34 +56,39 @@ import argparse
 from Bio.pairwise2 import align
 
 
-if __name__ =='__main__':
-        #parse inputs
+FINAL_MSG = """Final alignment parameters:
+    Number of sequences, M: {}
+    Number of effective sequences, M': {}
+    Number of alignment positions, L: {}
+    Number of positions in the ats: {}
+    Number of structure positions mapped: {}
+    Size of the distance matrix: {} x {}
+"""
+
+DEFAULT_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY-"
+
+if __name__ == '__main__':
         parser = argparse.ArgumentParser()
         parser.add_argument("alignment", help='Input Sequence Alignment')
-        parser.add_argument("-s","--pdb", dest="pdbid", help="PDB identifier (ex: 1RX2)")
-        parser.add_argument("-c","--chainID", dest="chainID", default = 'A', help="chain ID in the PDB for the reference sequence")
-        parser.add_argument("-t","--truncate", action="store_true", dest = "truncate", default = False, help="truncate the alignment to the positions in the reference PDB, default: False")
-        parser.add_argument("--output", dest="outputfile", default = None, help="specify an outputfile name")
-        # parser.add_argument("-f","--species", dest="species", help="species of the reference sequence")
-        # parser.add_argument("-r","--refseq", dest="refseq", help="reference sequence, supplied as a fasta file")
-        # parser.add_argument("-o","--refpos", dest="refpos", help="reference positions, supplied as a text file with one position specified per line")
-        # parser.add_argument("-i","--refindex", dest="i_ref", type = int, help="reference sequence number in the alignment, COUNTING FROM 0")
-        # parser.add_argument("-p","--parameters", dest="parameters", default=[0.2, 0.2, 0.2, 0.8], type=float, nargs=4, help="list of parameters for filtering the alignment: [max_frac_gaps for positions, max_frac_gaps for sequences, min SID to reference seq, max SID to reference seq] default values: [0.2, 0.2, 0.2, 0.8] (see filterPos and filterSeq functions for details)")
-        # parser.add_argument("-n","--selectSeqs", action="store_true", dest = "Nselect", default = False, help="subsample the alignment to (1.5 * the number of effective sequences) to reduce computational time, default: False")
-        # parser.add_argument("-m","--matlab", action="store_true", dest = "matfile", default = False, help="write out the results of this script to a matlab workspace for further analysis")
+        parser.add_argument("-s", "--pdb", dest="pdbid", help="PDB identifier (ex: 1RX2)")
+        parser.add_argument("-c", "--chainID", dest="chainID", default='A',
+                            help="chain ID in the PDB for the reference sequence")
+        parser.add_argument("-t", "--truncate", action="store_true", dest="truncate", default=False,
+                            help="truncate the alignment to the positions in the reference PDB, default: False")
+        parser.add_argument("--output", dest="outputfile", default=None, help="specify an outputfile name")
         options = parser.parse_args()
 
         PARAMETERS = [0.2, 0.2, 0.2, 0.8]
 
         headers_full, sequences_full = sca.readAlg(options.alignment)
-        print('Loaded alignment of {} sequences, {} positions.'.format(len(headers_full), len(sequences_full[0])))
+        print("Loaded alignment of {} sequences, {} positions.".format(len(headers_full), len(sequences_full[0])))
 
         print("Checking alignment for non-standard amino acids")
         alg_out, hd_out = list(), list()
         for i, k in enumerate(sequences_full):
             has_invalid = False
             for aa in k:
-                if aa not in 'ACDEFGHIKLMNPQRSTVWY-':
+                if aa not in DEFAULT_AMINO_ACIDS:
                     has_invalid = True
                     break
             if has_invalid:
@@ -93,14 +98,14 @@ if __name__ =='__main__':
                 hd_out.append(headers_full[i])
         headers_full = hd_out
         sequences_full = alg_out
-        print("Alignment size after removing sequences with non-standard amino acids: %i" % (len(sequences_full)))
+        print("Alignment size after removing sequences with non-standard amino acids: {}".format(len(sequences_full)))
 
         # Do an initial trimming to remove excessively gapped positions - this is critical for building a correct ATS
-        print("Trimming alignment for highly gapped positions (80% or more).")
+        print("Trimming alignment for highly gapped positions (80% or more)")
         alg_out, poskeep = sca.filterPos(sequences_full, [1], 0.8)
         sequences_ori = sequences_full
         sequences_full = alg_out
-        print("Alignment size post-trimming: %i positions" % len(sequences_full[0]))
+        print("Alignment size post-trimming: {} positions".format(len(sequences_full[0])))
 
         seq_pdb, ats_pdb, dist_pdb = sca.pdbSeq(options.pdbid, options.chainID)
         print("Finding reference sequence using Bio.pairwise2.align.globalxx")
@@ -109,7 +114,7 @@ if __name__ =='__main__':
             score.append(align.globalxx(seq_pdb, s, one_alignment_only=1, score_only=1))
         i_ref = score.index(max(score))
         options.i_ref = i_ref
-        print("reference sequence index is: %i"  % (i_ref))
+        print("Index of reference sequence: {}".format(i_ref))
         print(headers_full[i_ref])
         print(sequences_full[i_ref])
         sequences, ats = sca.makeATS(sequences_full, ats_pdb, seq_pdb, i_ref, options.truncate)
@@ -118,7 +123,7 @@ if __name__ =='__main__':
             for (k, pos2) in enumerate(ats):
                 if k != j:
                     if (pos1 == '-') or (pos2 == '-'):
-                        dist_new[j, k] == 1000
+                        dist_new[j, k] = 1000
                     else:
                         ix_j = ats_pdb.index(pos1)
                         ix_k = ats_pdb.index(pos2)
@@ -128,7 +133,7 @@ if __name__ =='__main__':
         print("Conducting sequence and position filtering: alignment size is {} seqs, {} pos".format(
             len(sequences), len(sequences[0]))
         )
-        print("ATS and distmat size - ATS: %i, distmat: %i x %i" % (len(ats), len(dist_pdb), len(dist_pdb[0])))
+        print("ATS and distmat size - ATS: {}, distmat: {} x {}".format(len(ats), len(dist_pdb), len(dist_pdb[0])))
 
         alg0, seqw0, seqkeep = sca.filterSeq(sequences, max_fracgaps=PARAMETERS[1],
                                              min_seqid=PARAMETERS[2],
@@ -153,16 +158,8 @@ if __name__ =='__main__':
         effseqs = seqw.sum()
         msa_num = sca.lett2num(alg)
         Nseq, Npos = msa_num.shape
-        print("Final alignment parameters:")
-        print("Number of sequences: M = %i" % (Nseq))
-        print("Number of effective sequences: M' = %i" % (effseqs))
-        print("Number of alignment positions: L = %i" % (Npos))
-
-        if options.pdbid is not None:
-            print("Number of positions in the ats: %i" % (len(ats)))
-            structPos = [i for (i,k) in enumerate(ats) if k != '-']
-            print("Number of structure positions mapped: %i" % (len(structPos)))
-            print("Size of the distance matrix: %i x %i" % (len(distmat), len(distmat[0])))
+        structPos = [i for (i, k) in enumerate(ats) if k != '-']
+        print(FINAL_MSG.format(Nseq, effseqs, Npos, len(ats), len(structPos), len(distmat), len(distmat[0])))
 
         path_list = options.alignment.split(os.sep)
         fn = path_list[-1]
