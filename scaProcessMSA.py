@@ -107,45 +107,26 @@ if __name__ =='__main__':
 
         try:
             seq_pdb, ats_pdb, dist_pdb = sca.pdbSeq(options.pdbid, options.chainID)
-            if options.species is not None:
-                try:
-                    print("Finding reference sequence using species-based best match..")
-                    i_ref = sca.MSAsearch(headers_full, sequences_full, seq_pdb, options.species)
-                    Options_ref = i_ref
-                    print("reference sequence index is: %i" % (i_ref))
-                    print(headers_full[i_ref])
-                    print(sequences_full[i_ref])
-                except:
-                    print("Cant find the reference sequence using species-based best_match! Using global MSAsearch...")
-                    try:
-                        i_ref = sca.MSAsearch(headers_full, sequences_full,seq_pdb)
-                        options.i_ref = i_ref
-                        print("reference sequence index is: %i"  % (i_ref))
-                        print(headers_full[i_ref])
-                        print(sequences_full[i_ref])
-                    except:
-                        sys.exit("Error!!  Can't find reference sequence...")
-            else:
-                try:
-                    print("Finding reference sequence using global MSAsearch...")
-                    i_ref = sca.MSAsearch(headers_full, sequences_full,seq_pdb)
-                    options.i_ref = i_ref
-                    print("reference sequence index is: %i"  % (i_ref))
-                    print(headers_full[i_ref])
-                    print(sequences_full[i_ref])
-                except:
-                    sys.exit("Error!!  Can't find reference sequence...")
+            try:
+                print("Finding reference sequence using global MSAsearch...")
+                i_ref = sca.MSAsearch(headers_full, sequences_full,seq_pdb)
+                options.i_ref = i_ref
+                print("reference sequence index is: %i"  % (i_ref))
+                print(headers_full[i_ref])
+                print(sequences_full[i_ref])
+            except:
+                sys.exit("Error!!  Can't find reference sequence...")
             sequences, ats = sca.makeATS(sequences_full, ats_pdb, seq_pdb, i_ref, options.truncate)
             dist_new = np.zeros((len(ats), len(ats)))
-            for (j,pos1) in enumerate(ats):
-                for (k,pos2) in enumerate(ats):
-                    if k!=j:
+            for (j, pos1) in enumerate(ats):
+                for (k, pos2) in enumerate(ats):
+                    if k != j:
                         if (pos1 == '-') or (pos2 == '-'):
-                            dist_new[j,k] == 1000;
+                            dist_new[j,k] == 1000
                         else:
                             ix_j = ats_pdb.index(pos1)
                             ix_k = ats_pdb.index(pos2)
-                            dist_new[j,k] = dist_pdb[ix_j,ix_k]
+                            dist_new[j, k] = dist_pdb[ix_j, ix_k]
             dist_pdb = dist_new
         except:
             sys.exit("Error!!! Something wrong with PDBid or path...")
