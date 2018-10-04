@@ -48,11 +48,8 @@ This program is free software distributed under the BSD 3-clause
 license, please see the file LICENSE for details.
 """
 from __future__ import division
-import sys, time
 import os
 import numpy as np
-import copy
-import scipy.cluster.hierarchy as sch
 import scaTools as sca
 import pickle
 import argparse
@@ -144,7 +141,9 @@ if __name__ =='__main__':
             distmat = dist_pdb[np.ix_(iposkeep, iposkeep)]
         effseqsprelimit = int(seqw0.sum())
         Nseqprelimit = len(alg1)
-        print("After filtering: alignment size is %i seqs, %i effective seqs, %i pos" % (len(alg1), effseqsprelimit, len(alg1[0])))        
+        print("After filtering: alignment size is {} seqs, {} effective seqs, {} pos".format(
+            len(alg1), effseqsprelimit, len(alg1[0]))
+        )
 
         alg = alg1
         hd = headers
