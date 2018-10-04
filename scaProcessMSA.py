@@ -164,11 +164,11 @@ if __name__ == '__main__':
         path_list = os.path.split(options.alignment)
         fn = path_list[-1]
         fn_noext = fn.split(".")[0]
-        f = open("Outputs/" + fn_noext + "processed" + ".fasta", "w")
-        for i in range(len(alg)):
-            f.write(">%s\n" % (hd[i]))
-            f.write(alg[i] + "\n")
-        f.close()
+
+        with open("Outputs/" + fn_noext + "processed" + ".fasta", "w") as f:
+            for i in range(len(alg)):
+                f.write(">%s\n" % (hd[i]))
+                f.write(alg[i] + "\n")
 
         sequence_dict = {
             'alg': alg,
@@ -179,14 +179,13 @@ if __name__ == '__main__':
             'Npos': Npos,
             'ats': ats,
             'effseqs': effseqs,
-            'limitseqs': options.Nselect,
             'NseqPrelimit': Nseqprelimit,
             'effseqsPrelimit': effseqsprelimit,
             'pdbid': options.pdbid,
             'pdb_chainID': options.chainID,
             'distmat': distmat,
             'i_ref': i_ref,
-            'trim_parameters': options.parameters,
+            'trim_parameters': PARAMETERS,
             'truncate_flag': options.truncate
         }
 
@@ -196,5 +195,5 @@ if __name__ == '__main__':
         data_bank = {
             'sequence': sequence_dict
         }
-        pickle.dump(data_bank, open("Outputs/" + fn_noext + ".db", "wb"))
-
+        with open("Outputs/" + fn_noext + ".db", "wb") as db_out:
+            pickle.dump(data_bank, db_out)
