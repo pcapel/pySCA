@@ -56,8 +56,8 @@ import scipy.cluster.hierarchy as sch
 import scaTools as sca
 import pickle
 import argparse
-from Bio import SeqIO
-from scipy.io import savemat
+from Bio.pairwise2 import align
+
 
 if __name__ =='__main__':
         #parse inputs
@@ -82,7 +82,7 @@ if __name__ =='__main__':
         print('Loaded alignment of {} sequences, {} positions.'.format(len(headers_full), len(sequences_full[0])))
 
         print("Checking alignment for non-standard amino acids")
-        alg_out, hd_out  = list(), list()
+        alg_out, hd_out = list(), list()
         for i, k in enumerate(sequences_full):
             has_invalid = False
             for aa in k:
@@ -105,33 +105,32 @@ if __name__ =='__main__':
         sequences_full = alg_out
         print("Alignment size post-trimming: %i positions" % len(sequences_full[0]))
 
-        try:
-            seq_pdb, ats_pdb, dist_pdb = sca.pdbSeq(options.pdbid, options.chainID)
-            try:
-                print("Finding reference sequence using global MSAsearch...")
-                i_ref = sca.MSAsearch(headers_full, sequences_full,seq_pdb)
-                options.i_ref = i_ref
-                print("reference sequence index is: %i"  % (i_ref))
-                print(headers_full[i_ref])
-                print(sequences_full[i_ref])
-            except:
-                sys.exit("Error!!  Can't find reference sequence...")
-            sequences, ats = sca.makeATS(sequences_full, ats_pdb, seq_pdb, i_ref, options.truncate)
-            dist_new = np.zeros((len(ats), len(ats)))
-            for (j, pos1) in enumerate(ats):
-                for (k, pos2) in enumerate(ats):
-                    if k != j:
-                        if (pos1 == '-') or (pos2 == '-'):
-                            dist_new[j,k] == 1000
-                        else:
-                            ix_j = ats_pdb.index(pos1)
-                            ix_k = ats_pdb.index(pos2)
-                            dist_new[j, k] = dist_pdb[ix_j, ix_k]
-            dist_pdb = dist_new
-        except:
-            sys.exit("Error!!! Something wrong with PDBid or path...")
+        seq_pdb, ats_pdb, dist_pdb = sca.pdbSeq(options.pdbid, options.chainID)
+        print("Finding reference sequence using Bio.pairwise2.align.globalxx")
+        score = list()
+        for k, s in enumerate(sequences_full):
+            score.append(align.globalxx(seq_pdb, s, one_alignment_only=1, score_only=1))
+        i_ref = score.index(max(score))
+        options.i_ref = i_ref
+        print("reference sequence index is: %i"  % (i_ref))
+        print(headers_full[i_ref])
+        print(sequences_full[i_ref])
+        sequences, ats = sca.makeATS(sequences_full, ats_pdb, seq_pdb, i_ref, options.truncate)
+        dist_new = np.zeros((len(ats), len(ats)))
+        for (j, pos1) in enumerate(ats):
+            for (k, pos2) in enumerate(ats):
+                if k != j:
+                    if (pos1 == '-') or (pos2 == '-'):
+                        dist_new[j, k] == 1000
+                    else:
+                        ix_j = ats_pdb.index(pos1)
+                        ix_k = ats_pdb.index(pos2)
+                        dist_new[j, k] = dist_pdb[ix_j, ix_k]
+        dist_pdb = dist_new
         # filtering sequences and positions, calculations of effective number of seqs
-        print("Conducting sequence and position filtering: alignment size is %i seqs, %i pos" % (len(sequences), len(sequences[0])))   
+        print("Conducting sequence and position filtering: alignment size is {} seqs, {} pos".format(
+            len(sequences), len(sequences[0]))
+        )
         print("ATS and distmat size - ATS: %i, distmat: %i x %i" % (len(ats), len(dist_pdb), len(dist_pdb[0])))
 
         alg0, seqw0, seqkeep = sca.filterSeq(sequences, max_fracgaps=PARAMETERS[1],
@@ -142,19 +141,13 @@ if __name__ =='__main__':
         alg1, iposkeep = sca.filterPos(alg0, seqw0, PARAMETERS[0])
         ats = [ats[i] for i in iposkeep]
         if options.pdbid is not None: 
-            distmat = dist_pdb[np.ix_(iposkeep,iposkeep)]
+            distmat = dist_pdb[np.ix_(iposkeep, iposkeep)]
         effseqsprelimit = int(seqw0.sum())
         Nseqprelimit = len(alg1)
         print("After filtering: alignment size is %i seqs, %i effective seqs, %i pos" % (len(alg1), effseqsprelimit, len(alg1[0])))        
 
-        # Limitation of total sequences to [1.5 * # of effective sequences] if Nselect is set to True
-        if (options.Nselect):
-            seqsel = sca.randSel(seqw0, int(1.5*effseqsprelimit), [seqkeep.index(i_ref)])
-            alg = [alg1[s] for s in seqsel]
-            hd = [headers[s] for s in seqsel]
-        else:
-            alg = alg1
-            hd = headers
+        alg = alg1
+        hd = headers
 
         # calculation of final MSA, sequence weights    
         seqw = sca.seqWeights(alg)
@@ -177,40 +170,35 @@ if __name__ =='__main__':
         fn_noext = fn.split(".")[0]
         f = open("Outputs/" + fn_noext + "processed" + ".fasta", "w")
         for i in range(len(alg)):
-            #f.write(">" + hd[i] + "\n")
             f.write(">%s\n" % (hd[i]))
-            f.write (alg[i] + "\n")
+            f.write(alg[i] + "\n")
         f.close()
 
-        D = {}
-        D['alg'] = alg
-        D['hd'] = hd  # keep
-        D['msa_num'] = msa_num  # keep
-        D['seqw'] = seqw  # keep
-        D['Nseq'] = Nseq  # keep
-        D['Npos'] = Npos  # keep
-        D['ats'] = ats  # keep
-        D['effseqs'] = effseqs
-        D['limitseqs'] = options.Nselect
-        D['NseqPrelimit'] = Nseqprelimit
-        D['effseqsPrelimit'] = effseqsprelimit
-        if options.pdbid is not None:
-            D['pdbid'] = options.pdbid
-            D['pdb_chainID'] = options.chainID
-            D['distmat'] = distmat
-        if options.refseq is not None:
-            D['refseq'] = options.refseq
-        if options.refpos is not None:
-            D['refpos'] = options.refpos
-        D['i_ref'] = i_ref
-        D['trim_parameters'] = options.parameters
-        D['truncate_flag'] = options.truncate
-        
-        if (options.outputfile is not None):
+        sequence_dict = {
+            'alg': alg,
+            'hd': hd,
+            'msa_num': msa_num,
+            'seqw': seqw,
+            'Nseq': Nseq,
+            'Npos': Npos,
+            'ats': ats,
+            'effseqs': effseqs,
+            'limitseqs': options.Nselect,
+            'NseqPrelimit': Nseqprelimit,
+            'effseqsPrelimit': effseqsprelimit,
+            'pdbid': options.pdbid,
+            'pdb_chainID': options.chainID,
+            'distmat': distmat,
+            'i_ref': i_ref,
+            'trim_parameters': options.parameters,
+            'truncate_flag': options.truncate
+        }
+
+        if options.outputfile is not None:
             fn_noext = options.outputfile
-        print("Opening database file "+"Outputs/"+ fn_noext)
-        db = {}
-        db['sequence']=D
- 
-        pickle.dump(db,open("Outputs/"+ fn_noext + ".db","wb"))
+        print("Opening database file " + "Outputs/" + fn_noext)
+        data_bank = {
+            'sequence': sequence_dict
+        }
+        pickle.dump(data_bank, open("Outputs/" + fn_noext + ".db", "wb"))
 

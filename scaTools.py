@@ -173,7 +173,8 @@ def clean_al(alg, code='ACDEFGHIKLMNPQRSTVWY', gap='-'):
             else: seq_clean += gap
         alg_clean.append(seq_clean)
     return alg_clean
-    
+
+
 def MSAsearch(hd, algn, seq, species = None, path2_algprog=path2needle):
     ''' 
     Identify the sequence in the alignment that most closely corresponds to the species of the reference sequence, and return its index.
@@ -201,9 +202,9 @@ def MSAsearch(hd, algn, seq, species = None, path2_algprog=path2needle):
 
     try:
         print("Trying MSASearch with ggsearch")
-        if not os.path.exists('tmp/'): os.makedirs('tmp/')  
+        if not os.path.exists('tmp/'): os.makedirs('tmp/')
         output_handle = open('tmp/PDB_seq.fasta', 'w')
-        SeqIO.write(SeqRecord(Seq(seq), id='PDB sequence'), output_handle, "fasta") 
+        SeqIO.write(SeqRecord(Seq(seq), id='PDB sequence'), output_handle, "fasta")
         output_handle.close()
         f = open("tmp/algn_seq.fasta", "w")
         for i in range(len(algn)):
@@ -212,7 +213,7 @@ def MSAsearch(hd, algn, seq, species = None, path2_algprog=path2needle):
         f.close()
         args = ['ggsearch36','-M 1-'+str(len(algn[0])),'-b','1','-m 8','tmp/PDB_seq.fasta','tmp/algn_seq.fasta']
         output = subprocess.check_output(args)
-        i_0 = [i for i in range(len(hd)) if output.split('\t')[1] in hd[i]]  
+        i_0 = [i for i in range(len(hd)) if output.split('\t')[1] in hd[i]]
         if species is not None:
             strseqnum = key_list[i_0[0]]
         else:
@@ -221,10 +222,10 @@ def MSAsearch(hd, algn, seq, species = None, path2_algprog=path2needle):
         return strseqnum
     except:
         try:
-            from Bio.Emboss.Applications import NeedleCommandline 
+            from Bio.Emboss.Applications import NeedleCommandline
             print("Trying MSASearch with EMBOSS")
             output_handle = open('tmp/PDB_seq.fasta', 'w')
-            SeqIO.write(SeqRecord(Seq(seq), id='PDB sequence'), output_handle, "fasta") 
+            SeqIO.write(SeqRecord(Seq(seq), id='PDB sequence'), output_handle, "fasta")
             output_handle.close()
             output_handle = open("tmp/algn_seq.fasta", "w")
             s_records = list()
@@ -254,11 +255,11 @@ def MSAsearch(hd, algn, seq, species = None, path2_algprog=path2needle):
             score = list()
             for k,s in enumerate(algn):
                 score.append(pairwise2.align.globalxx(algn, s, one_alignment_only=1, score_only=1))
-            i_0 = score.index(max(score)) 
+            i_0 = score.index(max(score))
             if species is not None:
                 strseqnum = key_list[i_0]
             else:
-                strseqnum = i_0 
+                strseqnum = i_0
             print("BP strseqnum is %i" % (strseqnum))
             return strseqnum
 
