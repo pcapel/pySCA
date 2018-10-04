@@ -2,3 +2,6 @@
 *~
 # ignore *pyc files
 *.pyc
+
+env/
+*.idea*
