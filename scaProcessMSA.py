@@ -161,7 +161,7 @@ if __name__ == '__main__':
         structPos = [i for (i, k) in enumerate(ats) if k != '-']
         print(FINAL_MSG.format(Nseq, effseqs, Npos, len(ats), len(structPos), len(distmat), len(distmat[0])))
 
-        path_list = options.alignment.split(os.sep)
+        path_list = os.path.split(options.alignment)
         fn = path_list[-1]
         fn_noext = fn.split(".")[0]
         f = open("Outputs/" + fn_noext + "processed" + ".fasta", "w")
