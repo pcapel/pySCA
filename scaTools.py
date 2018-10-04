@@ -1371,7 +1371,7 @@ def pdbSeq(pdbid, chain='A', path2pdb=path2structures, calcDist=1):
      'GLU': 'E', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I', 'LEU': 'L', 'LYS': 'K', 'MET': 'M',\
      'PHE': 'F', 'PRO': 'P', 'SER': 'S', 'THR': 'T', 'TRP': 'W', 'TYR': 'Y', 'VAL': 'V'}
     # Read PDB structure:
-    structure = PDBParser().get_structure(pdbid, path2pdb+pdbid+'.pdb')
+    structure = PDBParser(QUIET=True).get_structure(pdbid, path2pdb+pdbid+'.pdb')
     # Fill up sequence and label information
     sequence = ''; labels = list()
     residues = [res for res in structure[0][chain] if res.get_id()[0] == ' ']
