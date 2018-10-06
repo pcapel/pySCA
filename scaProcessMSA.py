@@ -48,12 +48,18 @@ This program is free software distributed under the BSD 3-clause
 license, please see the file LICENSE for details.
 """
 from __future__ import division
+import time
+
 import os
-import numpy as np
-import scaTools as sca
 import pickle
 import argparse
+import re
+
+import numpy as np
 from Bio.pairwise2 import align
+from Bio.PDB import PDBParser
+
+import scaTools as sca
 
 
 FINAL_MSG = """Final alignment parameters:
@@ -64,134 +70,227 @@ FINAL_MSG = """Final alignment parameters:
     Number of structure positions mapped: {}
     Size of the distance matrix: {} x {}
 """
-
+# Gap limiting parameters
 PARAMETERS = [0.2, 0.2, 0.2, 0.8]
+# Default standard amino acids
 DEFAULT_AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY-"
+# Table of 3-letter to 1-letter code for amino acids
+AMINO_ACID_TABLE = {
+    'ALA': 'A',
+    'ARG': 'R',
+    'ASN': 'N',
+    'ASP': 'D',
+    'CYS': 'C',
+    'GLN': 'Q',
+    'GLU': 'E',
+    'GLY': 'G',
+    'HIS': 'H',
+    'ILE': 'I',
+    'LEU': 'L',
+    'LYS': 'K',
+    'MET': 'M',
+    'PHE': 'F',
+    'PRO': 'P',
+    'SER': 'S',
+    'THR': 'T',
+    'TRP': 'W',
+    'TYR': 'Y',
+    'VAL': 'V'
+}
+
+
+def get_pdb_residues(pdb_id, chain_id, input_dir='Inputs/', QUIET=False):
+    """
+    Read the PDB structure using Bio.PDB.PDBParser
+    :param pdb_id:
+    :param input_dir:
+    :return:
+    """
+    model_index = 0
+    hetero_atom_index = 0
+    file_name = os.path.join(input_dir, pdb_id + '.pdb')
+    structure = PDBParser(QUIET=True).get_structure(pdb_id, file_name)
+    return [res for res in structure[model_index][chain_id] if res.get_id()[hetero_atom_index] == ' ']
+
+
+def get_pdb_sequence(residues, substitute_unknown='X'):
+    """
+    Get the sequence for the pdb residues, and the labels
+    :param residues:
+    :param substitute_unknown:
+    :return:
+    """
+    sequence, labels = list(), list()
+    for residue in residues:
+        residue_id = residue.get_id()
+        sequence_id = residue_id[1]
+        insertion_code = residue_id[2]
+        labels.append(str(sequence_id) + str(insertion_code).strip())
+        sequence.append(AMINO_ACID_TABLE.get(residue.get_resname(), substitute_unknown))
+    return str.join('', sequence), labels
+
+
+def get_pdb_distances(residues):
+    """
+    Calculate the distances between residues
+    :param residues:
+    :return:
+    """
+    # Distances between residues (minimal distance between atoms, in angstrom):
+    dist = np.zeros((len(residues), len(residues)))
+    for n0, res0 in enumerate(residues):
+        for n1, res1 in enumerate(residues):
+            dist[n0, n1] = min([atom0 - atom1 for atom0 in res0 for atom1 in res1])
+    return dist
+
+
+def locate_reference(sequences, pdb_sequence):
+    """
+    Get the index of the reference sequence in sequences using a global pairwise alignment
+    :param sequences:
+    :param pdb_sequence:
+    :return:
+    """
+    score = list()
+    for index, sequence in enumerate(sequences):
+        score.append(align.globalxx(pdb_sequence, sequence, one_alignment_only=1, score_only=1))
+    return score.index(max(score))
+
+
+def get_options():
+    """
+    Use argparse to parse the args.
+    :return: output from ArgumentParser.parse_args
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument("alignment", help='Input Sequence Alignment')
+    parser.add_argument("-s", "--pdb", dest="pdbid", help="PDB identifier (ex: 1RX2)")
+    parser.add_argument("-c", "--chainID", dest="chainID", default='A',
+                        help="chain ID in the PDB for the reference sequence")
+    parser.add_argument("-t", "--truncate", action="store_true", dest="truncate", default=False,
+                        help="truncate the alignment to the positions in the reference PDB, default: False")
+    parser.add_argument("--output", dest="outputfile", default=None, help="specify an outputfile name")
+    return parser.parse_args()
+
+
+def filter_non_standard(alignment, headers, amino_acids):
+    """
+    Loop through the alignment and check for non-standard amino acids in the sequences based on the parameter
+    :param alignment: (List[String]) The multiple sequence alignment sequences as a list
+    :param headers: (List[String]) The multiple sequence alignment headers as a list
+    :param amino_acids: (String) The amino acid codes to consider standard as a single string
+    :return: (Tuple(List[String], List[String]) the sequences and headers that made the cut
+    """
+    non_standard = re.compile(f'[^{amino_acids}]')
+    align_clean, headers_clean = list(), list()
+    for i, sequence in enumerate(alignment):
+        if non_standard.search(sequence) is not None:
+            continue
+        else:
+            align_clean.append(sequence)
+            headers_clean.append(headers[i])
+    return align_clean, headers_clean
+
 
 if __name__ == '__main__':
-        parser = argparse.ArgumentParser()
-        parser.add_argument("alignment", help='Input Sequence Alignment')
-        parser.add_argument("-s", "--pdb", dest="pdbid", help="PDB identifier (ex: 1RX2)")
-        parser.add_argument("-c", "--chainID", dest="chainID", default='A',
-                            help="chain ID in the PDB for the reference sequence")
-        parser.add_argument("-t", "--truncate", action="store_true", dest="truncate", default=False,
-                            help="truncate the alignment to the positions in the reference PDB, default: False")
-        parser.add_argument("--output", dest="outputfile", default=None, help="specify an outputfile name")
-        options = parser.parse_args()
+    _start = time.time()
+    options = get_options()
 
-        headers_full, sequences_full = sca.readAlg(options.alignment)
-        print("Loaded alignment of {} sequences, {} positions.".format(len(headers_full), len(sequences_full[0])))
+    headers_full, sequences_full = sca.readAlg(options.alignment)
+    print("Loaded alignment of {} sequences, {} positions.".format(len(headers_full), len(sequences_full[0])))
 
-        print("Checking alignment for non-standard amino acids")
-        alg_out, hd_out = list(), list()
-        for i, k in enumerate(sequences_full):
-            has_invalid = False
-            for aa in k:
-                if aa not in DEFAULT_AMINO_ACIDS:
-                    has_invalid = True
-                    break
-            if has_invalid:
-                continue
-            else:
-                alg_out.append(k)
-                hd_out.append(headers_full[i])
-        headers_full = hd_out
-        sequences_full = alg_out
-        print("Alignment size after removing sequences with non-standard amino acids: {}".format(len(sequences_full)))
+    print("Checking alignment for non-standard amino acids")
+    standard_sequences, standard_headers = filter_non_standard(sequences_full, headers_full, DEFAULT_AMINO_ACIDS)
 
-        # Do an initial trimming to remove excessively gapped positions - this is critical for building a correct ATS
-        print("Trimming alignment for highly gapped positions (80% or more)")
-        alg_out, poskeep = sca.filterPos(sequences_full, [1], 0.8)
-        sequences_ori = sequences_full
-        sequences_full = alg_out
-        print("Alignment size post-trimming: {} positions".format(len(sequences_full[0])))
+    print("Alignment size after removing sequences with non-standard amino acids: {}".format(len(standard_sequences)))
+    # Do an initial trimming to remove excessively gapped positions - this is critical for building a correct ATS
+    print("Trimming alignment for highly gapped positions (80% or more)")
+    position_filtered_sequences, kept_positions = sca.filterPos(standard_sequences, [1], 0.8)
 
-        seq_pdb, ats_pdb, dist_pdb = sca.pdbSeq(options.pdbid, options.chainID)
-        print("Finding reference sequence using Bio.pairwise2.align.globalxx")
-        score = list()
-        for k, s in enumerate(sequences_full):
-            score.append(align.globalxx(seq_pdb, s, one_alignment_only=1, score_only=1))
-        i_ref = score.index(max(score))
-        options.i_ref = i_ref
-        print("Index of reference sequence: {}".format(i_ref))
-        print(headers_full[i_ref])
-        print(sequences_full[i_ref])
-        sequences, ats = sca.makeATS(sequences_full, ats_pdb, seq_pdb, i_ref, options.truncate)
-        dist_new = np.zeros((len(ats), len(ats)))
-        for (j, pos1) in enumerate(ats):
-            for (k, pos2) in enumerate(ats):
-                if k != j:
-                    if (pos1 == '-') or (pos2 == '-'):
-                        dist_new[j, k] = 1000
-                    else:
-                        ix_j = ats_pdb.index(pos1)
-                        ix_k = ats_pdb.index(pos2)
-                        dist_new[j, k] = dist_pdb[ix_j, ix_k]
-        dist_pdb = dist_new
-        # filtering sequences and positions, calculations of effective number of seqs
-        print("Conducting sequence and position filtering: alignment size is {} seqs, {} pos".format(
-            len(sequences), len(sequences[0]))
-        )
-        print("ATS and distmat size - ATS: {}, distmat: {} x {}".format(len(ats), len(dist_pdb), len(dist_pdb[0])))
+    print("Alignment size post-trimming: {} positions".format(len(position_filtered_sequences[0])))
 
-        alg0, seqw0, seqkeep = sca.filterSeq(sequences, max_fracgaps=PARAMETERS[1],
-                                             min_seqid=PARAMETERS[2],
-                                             max_seqid=PARAMETERS[3])
-       
-        headers = [headers_full[s] for s in seqkeep]
-        alg1, iposkeep = sca.filterPos(alg0, seqw0, PARAMETERS[0])
-        ats = [ats[i] for i in iposkeep]
-        distmat = dist_pdb[np.ix_(iposkeep, iposkeep)]
-        effseqsprelimit = int(seqw0.sum())
-        Nseqprelimit = len(alg1)
-        print("After filtering: alignment size is {} seqs, {} effective seqs, {} pos".format(
-            len(alg1), effseqsprelimit, len(alg1[0]))
-        )
+    print('Collecting residue data from PDB')
+    pdb_residues = get_pdb_residues(options.pdbid, options.chainID, QUIET=True)
 
-        alg = alg1
-        hd = headers
+    print('Parsing sequence and pdb_ats')
+    pdb_sequence, pdb_ats = get_pdb_sequence(pdb_residues)
 
-        # calculation of final MSA, sequence weights    
-        seqw = sca.seqWeights(alg)
-        effseqs = seqw.sum()
-        msa_num = sca.lett2num(alg)
-        Nseq, Npos = msa_num.shape
-        structPos = [i for (i, k) in enumerate(ats) if k != '-']
-        print(FINAL_MSG.format(Nseq, effseqs, Npos, len(ats), len(structPos), len(distmat), len(distmat[0])))
+    print('Calculating distances')
+    pdb_distances = get_pdb_distances(pdb_residues)
 
-        path_list = os.path.split(options.alignment)
-        fn = path_list[-1]
-        fn_noext = fn.split(".")[0]
+    print("Finding reference sequence using Bio.pairwise2.align.globalxx")
+    reference_index = locate_reference(position_filtered_sequences, pdb_sequence)
 
-        with open("Outputs/" + fn_noext + "processed" + ".fasta", "w") as f:
-            for i in range(len(alg)):
-                f.write(">%s\n" % (hd[i]))
-                f.write(alg[i] + "\n")
+    print("Index of reference sequence: {}".format(reference_index))
+    sequences, ats = sca.makeATS(position_filtered_sequences, pdb_ats, pdb_sequence, reference_index, options.truncate)
 
-        sequence_dict = {
-            'alg': alg,
-            'hd': hd,
-            'msa_num': msa_num,
-            'seqw': seqw,
-            'Nseq': Nseq,
-            'Npos': Npos,
-            'ats': ats,
-            'effseqs': effseqs,
-            'NseqPrelimit': Nseqprelimit,
-            'effseqsPrelimit': effseqsprelimit,
-            'pdbid': options.pdbid,
-            'pdb_chainID': options.chainID,
-            'distmat': distmat,
-            'i_ref': i_ref,
-            'trim_parameters': PARAMETERS,
-            'truncate_flag': options.truncate
-        }
+    # filtering sequences and positions, calculations of effective number of seqs
+    print("Conducting sequence and position filtering: alignment size is {} seqs, {} pos".format(
+        len(sequences), len(sequences[0]))
+    )
+    print(f'ATS size: {len(ats)}')
+    print(f'Dim Distance Matrix: {len(pdb_distances)} x {len(pdb_distances[0])}')
 
-        if options.outputfile is not None:
-            fn_noext = options.outputfile
-        print("Opening database file " + "Outputs/" + fn_noext)
-        data_bank = {
-            'sequence': sequence_dict
-        }
-        with open("Outputs/" + fn_noext + ".db", "wb") as db_out:
-            pickle.dump(data_bank, db_out)
+    alg0, seqw0, seqkeep = sca.filterSeq(sequences, reference_index, max_fracgaps=PARAMETERS[1],
+                                         min_seqid=PARAMETERS[2],
+                                         max_seqid=PARAMETERS[3])
+
+    headers = [standard_headers[s] for s in seqkeep]
+    alg1, iposkeep = sca.filterPos(alg0, seqw0, PARAMETERS[0])
+    ats = [ats[i] for i in iposkeep]
+    distance_matrix = pdb_distances[np.ix_(iposkeep, iposkeep)]
+    effseqsprelimit = int(seqw0.sum())
+    Nseqprelimit = len(alg1)
+    print("After filtering: alignment size is {} seqs, {} effective seqs, {} pos".format(
+        len(alg1), effseqsprelimit, len(alg1[0]))
+    )
+
+    alg = alg1
+    hd = headers
+
+    # calculation of final MSA, sequence weights
+    seqw = sca.seqWeights(alg)
+    effseqs = seqw.sum()
+    msa_num = sca.lett2num(alg)
+    Nseq, Npos = msa_num.shape
+    structPos = [i for (i, k) in enumerate(ats) if k != '-']
+    print(FINAL_MSG.format(Nseq, effseqs, Npos, len(ats), len(structPos), len(distance_matrix), len(distance_matrix[0])))
+
+    path_list = os.path.split(options.alignment)
+    fn = path_list[-1]
+    fn_noext = fn.split(".")[0]
+
+    with open("Outputs/" + fn_noext + "processed" + ".fasta", "w") as f:
+        for i in range(len(alg)):
+            f.write(">%s\n" % (hd[i]))
+            f.write(alg[i] + "\n")
+
+    sequence_dict = {
+        'alg': alg,
+        'hd': hd,
+        'msa_num': msa_num,
+        'seqw': seqw,
+        'Nseq': Nseq,
+        'Npos': Npos,
+        'ats': ats,
+        'effseqs': effseqs,
+        'NseqPrelimit': Nseqprelimit,
+        'effseqsPrelimit': effseqsprelimit,
+        'pdbid': options.pdbid,
+        'pdb_chainID': options.chainID,
+        'distmat': distance_matrix,
+        'i_ref': reference_index,
+        'trim_parameters': PARAMETERS,
+        'truncate_flag': options.truncate
+    }
+
+    if options.outputfile is not None:
+        fn_noext = options.outputfile
+    print("Opening database file " + "Outputs/" + fn_noext)
+    data_bank = {
+        'sequence': sequence_dict
+    }
+    with open("Outputs/" + fn_noext + ".db", "wb") as db_out:
+        pickle.dump(data_bank, db_out)
+    _end = time.time()
+    print(f'Completed in {_end-_start} sec')

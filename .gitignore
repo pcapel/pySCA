@@ -7,3 +7,5 @@ env/
 *.idea*
 
 Outputs/*
+
+run_all.py
